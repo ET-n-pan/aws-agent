@@ -139,8 +139,8 @@ class InvokeResponse(BaseModel):
     response: str
     session_id: str
 
-@app.post("/invoke", response_model=InvokeResponse)
-async def invoke_agent(request: InvokeRequest):
+@app.post("/invocations", response_model=InvokeResponse)
+async def invocations(request: InvokeRequest):
     if agent is None:
         raise HTTPException(status_code=503, detail="Agent not initialized")
     
@@ -160,6 +160,10 @@ async def invoke_agent(request: InvokeRequest):
         response="".join(full_text_chunks),
         session_id=session_id
     )
+
+@app.get("/ping")
+async def ping():
+    return {"status": "ok"}
 
 @app.get("/health")
 async def health():
