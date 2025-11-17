@@ -65,7 +65,7 @@ async def lifespan(app: FastAPI):
                 args=[
                     "--from",
                     "awslabs.aws-documentation-mcp-server@latest",
-                    "awslabs.aws-documentation-mcp-server.exe",
+                    "awslabs.aws-documentation-mcp-server",
                 ],
             )
         )
@@ -78,7 +78,7 @@ async def lifespan(app: FastAPI):
                 args=[
                     "--from",
                     "awslabs.cdk-mcp-server@latest",
-                    "awslabs.cdk-mcp-server.exe",
+                    "awslabs.cdk-mcp-server",
                 ],
             )
         )
@@ -91,7 +91,7 @@ async def lifespan(app: FastAPI):
                 args=[
                     "--from",
                     "awslabs.cfn-mcp-server@latest",
-                    "awslabs.cfn-mcp-server.exe",
+                    "awslabs.cfn-mcp-server",
                 ],
             )
         )

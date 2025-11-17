@@ -1,5 +1,11 @@
-fastapi
-uvicorn[standard]
-pydantic
-strands
+bedrock-agentcore>=1.0.6
+faiss-cpu>=1.12.0
+fastapi>=0.121.1
+httpx>=0.28.1
+mcp>=1.21.0
+opensearch-py>=2.8.0
+pydantic>=2.12.4
+strands-agents>=1.15.0
+strands-agents-tools[mem0-memory]>=0.2.15
+uvicorn[standard]>=0.38.0
 boto3

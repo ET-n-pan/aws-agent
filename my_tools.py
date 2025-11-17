@@ -5,7 +5,11 @@ from typing import Dict, List, Optional, Any
 import boto3
 from strands import tool
 
-cfn = boto3.client("cloudformation")
+def get_cfn_client(region=None):
+    """Get CloudFormation client with optional region."""
+    if region:
+        return boto3.client("cloudformation", region_name=region)
+    return boto3.client("cloudformation")
 
 TERMINAL_STATUSES = {
     "CREATE_COMPLETE",
@@ -42,7 +46,7 @@ def deploy_bedrock_flow_stack(
           "last_events": [...],
         }
     """
-    client = cfn if region is None else boto3.client("cloudformation", region_name=region)
+    client = get_cfn_client(region)
     start = time.time()
 
     # Check if stack exists

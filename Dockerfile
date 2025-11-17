@@ -8,7 +8,10 @@ RUN apt-get update && apt-get install -y \
 
 # Install uv (for uvx command)
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
-ENV PATH="/root/.cargo/bin:$PATH"
+ENV PATH="/root/.local/bin:/root/.cargo/bin:$PATH"
+
+# Verify uv installation
+RUN which uv && uv --version
 
 WORKDIR /app
 
