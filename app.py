@@ -1,8 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 import asyncio
 import os
 import uuid
+import json
+import logging
 from contextlib import asynccontextmanager
 
 from mcp import stdio_client, StdioServerParameters
@@ -18,6 +20,10 @@ from bedrock_agentcore.memory.integrations.strands.config import (
 from bedrock_agentcore.memory.integrations.strands.session_manager import (
     AgentCoreMemorySessionManager,
 )
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 ACTOR_ID = "bedrock-flow-api"
 AGENTCORE_MEMORY_ID = "strands_agent_memory-GI7k3lEiET"
@@ -57,7 +63,7 @@ async def lifespan(app: FastAPI):
         region_name=AGENTCORE_REGION,
     )
     
-    # Initialize MCP clients (REMOVED AWS_PROFILE)
+    # Initialize MCP clients
     stdio_documentation_client = MCPClient(
         lambda: stdio_client(
             StdioServerParameters(
@@ -115,10 +121,12 @@ async def lifespan(app: FastAPI):
         tools=tools,
         callback_handler=None,
         session_manager=session_manager,
-        system_prompt="""[Your system prompt here]"""
+        system_prompt="""
+            You are a Bedrock Flow and CloudFormation expert that helps the user design, deploy, and debug Bedrock Flow stacks.
+        """
     )
     
-    print("✓ Agent initialized")
+    logger.info("✓ Agent initialized")
     
     yield
     
@@ -131,35 +139,97 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-class InvokeRequest(BaseModel):
-    prompt: str
-    session_id: str | None = None
+# Log all requests
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    logger.info(f"Request: {request.method} {request.url.path}")
+    logger.info(f"Headers: {dict(request.headers)}")
+    
+    # Read body
+    body = await request.body()
+    logger.info(f"Body: {body.decode() if body else 'empty'}")
+    
+    # Create new request with body
+    async def receive():
+        return {"type": "http.request", "body": body}
+    
+    request._receive = receive
+    
+    response = await call_next(request)
+    logger.info(f"Response status: {response.status_code}")
+    return response
 
-class InvokeResponse(BaseModel):
-    response: str
-    session_id: str
-
-@app.post("/invocations", response_model=InvokeResponse)
-async def invocations(request: InvokeRequest):
+@app.post("/invocations")
+async def invocations(request: Request):
+    """Handle invocations - accepts multiple input formats"""
     if agent is None:
         raise HTTPException(status_code=503, detail="Agent not initialized")
     
-    session_id = request.session_id or f"api-{uuid.uuid4()}"
-    
-    full_text_chunks = []
-    invocation_state = {
-        "user_id": ACTOR_ID,
-        "confirm_tool_calls": False,
-    }
-    
-    async for event in agent.stream_async(request.prompt, invocation_state=invocation_state):
-        if "data" in event:
-            full_text_chunks.append(event["data"])
-    
-    return InvokeResponse(
-        response="".join(full_text_chunks),
-        session_id=session_id
-    )
+    try:
+        # Parse request body
+        body = await request.body()
+        logger.info(f"Raw body: {body}")
+        
+        data = json.loads(body)
+        logger.info(f"Parsed data: {data}")
+        
+        # Extract prompt from various possible formats
+        prompt = None
+        session_id = None
+        
+        # Try different field names
+        if isinstance(data, dict):
+            prompt = (
+                data.get("prompt") or 
+                data.get("inputText") or 
+                data.get("input") or 
+                data.get("text") or
+                data.get("query")
+            )
+            session_id = data.get("session_id") or data.get("sessionId")
+        elif isinstance(data, str):
+            prompt = data
+        
+        if not prompt:
+            logger.error(f"Could not extract prompt from: {data}")
+            raise HTTPException(
+                status_code=422, 
+                detail=f"Missing prompt field. Received: {list(data.keys()) if isinstance(data, dict) else type(data)}"
+            )
+        
+        logger.info(f"Processing prompt: {prompt[:100]}...")
+        
+        session_id = session_id or f"api-{uuid.uuid4()}"
+        
+        # Run agent
+        full_text_chunks = []
+        invocation_state = {
+            "user_id": ACTOR_ID,
+            "confirm_tool_calls": False,
+        }
+        
+        async for event in agent.stream_async(prompt, invocation_state=invocation_state):
+            if "data" in event:
+                full_text_chunks.append(event["data"])
+        
+        response_text = "".join(full_text_chunks)
+        logger.info(f"Response generated: {len(response_text)} chars")
+        
+        # Return in multiple formats for compatibility
+        return {
+            "response": response_text,
+            "completion": response_text,
+            "output": response_text,
+            "session_id": session_id,
+            "sessionId": session_id
+        }
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"JSON decode error: {e}")
+        raise HTTPException(status_code=422, detail=f"Invalid JSON: {str(e)}")
+    except Exception as e:
+        logger.error(f"Error processing request: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/ping")
 async def ping():
