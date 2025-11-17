@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM --platform=linux/arm64 python:3.11-slim
 
 # Install system dependencies for uvx and MCP servers
 RUN apt-get update && apt-get install -y \
