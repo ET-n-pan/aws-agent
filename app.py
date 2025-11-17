@@ -1,10 +1,6 @@
 from fastapi import FastAPI, HTTPException, Request
-from pydantic import BaseModel
-import asyncio
-import os
 import uuid
 import json
-import logging
 from contextlib import asynccontextmanager
 
 from mcp import stdio_client, StdioServerParameters
@@ -20,10 +16,6 @@ from bedrock_agentcore.memory.integrations.strands.config import (
 from bedrock_agentcore.memory.integrations.strands.session_manager import (
     AgentCoreMemorySessionManager,
 )
-
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 ACTOR_ID = "bedrock-flow-api"
 AGENTCORE_MEMORY_ID = "strands_agent_memory-GI7k3lEiET"
@@ -77,18 +69,18 @@ async def lifespan(app: FastAPI):
         )
     )
     
-    stdio_cdk_client = MCPClient(
-        lambda: stdio_client(
-            StdioServerParameters(
-                command="uvx",
-                args=[
-                    "--from",
-                    "awslabs.cdk-mcp-server@latest",
-                    "awslabs.cdk-mcp-server",
-                ],
-            )
-        )
-    )
+    # stdio_cdk_client = MCPClient(
+    #     lambda: stdio_client(
+    #         StdioServerParameters(
+    #             command="uvx",
+    #             args=[
+    #                 "--from",
+    #                 "awslabs.cdk-mcp-server@latest",
+    #                 "awslabs.cdk-mcp-server",
+    #             ],
+    #         )
+    #     )
+    # )
     
     stdio_cfn_client = MCPClient(
         lambda: stdio_client(
@@ -103,7 +95,7 @@ async def lifespan(app: FastAPI):
         )
     )
     
-    mcp_clients = [stdio_documentation_client, stdio_cdk_client, stdio_cfn_client]
+    mcp_clients = [stdio_documentation_client, stdio_cfn_client]
     
     # Enter context managers
     for client in mcp_clients:
@@ -111,7 +103,6 @@ async def lifespan(app: FastAPI):
     
     tools = (
         stdio_documentation_client.list_tools_sync()
-        + stdio_cdk_client.list_tools_sync()
         + stdio_cfn_client.list_tools_sync()
         + [deploy_bedrock_flow_stack, invoke_bedrock_flow]
         + memory_provider.tools
@@ -121,12 +112,46 @@ async def lifespan(app: FastAPI):
         tools=tools,
         callback_handler=None,
         session_manager=session_manager,
-        system_prompt="""
-            You are a Bedrock Flow and CloudFormation expert that helps the user design, deploy, and debug Bedrock Flow stacks.
+        model="global.anthropic.claude-haiku-4-5-20251001-v1:0",
+        system_prompt="""You are a Bedrock Flow expert.
+
+            TOOLS YOU HAVE:
+            - MCP documentation tools for AWS docs.
+            - `agent_core_memory`: store / retrieve structured notes in Amazon Bedrock AgentCore Memory.
+
+            AT THE START OF EACH CONVERSATION:
+            1. If the user's request is about Bedrock Flow or CFN templates, first call:
+            - `agent_core_memory(action="retrieve", query="<task>", top_k=5)`
+            to see if relevant notes / patterns already exist.
+
+            ERROR HANDLING & MEMORY:
+            1. When you see a deployment or validation error:
+            - Summarize it into a short error key (e.g. "CFN ROLLBACK: Parameter X missing").
+            - Call `agent_core_memory(action="retrieve", query="<that key>", top_k=5)`
+                to see if we've solved it before.
+
+            2. If you solve a NEW error:
+            - Create a concise JSON note including:
+                - error_message
+                - root_cause
+                - final_fix (code snippet / template fragment)
+                - related_service (e.g. "bedrock-flow", "cloudformation")
+            - Call:
+                `agent_core_memory(
+                    action="record",
+                    content="<that JSON as a string>",
+                    label="<short error key>"
+                )`
+
+            DOCS USAGE:
+            - For up-to-date API shapes and behaviors, always trust MCP AWS documentation servers first.
+            - Use AgentCore Memory mainly for:
+            - recurring errors and their fixes
+            - stable patterns / best practices, not entire docs dumps.
         """
     )
     
-    logger.info("✓ Agent initialized")
+    print("✓ Agent initialized")
     
     yield
     
@@ -142,12 +167,14 @@ app = FastAPI(lifespan=lifespan)
 # Log all requests
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    logger.info(f"Request: {request.method} {request.url.path}")
-    logger.info(f"Headers: {dict(request.headers)}")
+    print(f"Request: {request.method} {request.url.path}")
+    print(f"Headers: {dict(request.headers)}")
+
+    
     
     # Read body
     body = await request.body()
-    logger.info(f"Body: {body.decode() if body else 'empty'}")
+    print(f"Body: {body.decode() if body else 'empty'}")
     
     # Create new request with body
     async def receive():
@@ -156,7 +183,7 @@ async def log_requests(request: Request, call_next):
     request._receive = receive
     
     response = await call_next(request)
-    logger.info(f"Response status: {response.status_code}")
+    print(f"Response status: {response.status_code}")
     return response
 
 @app.post("/invocations")
@@ -168,16 +195,15 @@ async def invocations(request: Request):
     try:
         # Parse request body
         body = await request.body()
-        logger.info(f"Raw body: {body}")
+        print(f"Raw body: {body}")
         
         data = json.loads(body)
-        logger.info(f"Parsed data: {data}")
+        print(f"Parsed data: {data}")
         
         # Extract prompt from various possible formats
         prompt = None
         session_id = None
         
-        # Try different field names
         if isinstance(data, dict):
             prompt = (
                 data.get("prompt") or 
@@ -191,13 +217,13 @@ async def invocations(request: Request):
             prompt = data
         
         if not prompt:
-            logger.error(f"Could not extract prompt from: {data}")
+            print(f"Could not extract prompt from: {data}")
             raise HTTPException(
                 status_code=422, 
                 detail=f"Missing prompt field. Received: {list(data.keys()) if isinstance(data, dict) else type(data)}"
             )
         
-        logger.info(f"Processing prompt: {prompt[:100]}...")
+        print(f"Processing prompt: {prompt[:100]}...")
         
         session_id = session_id or f"api-{uuid.uuid4()}"
         
@@ -213,22 +239,19 @@ async def invocations(request: Request):
                 full_text_chunks.append(event["data"])
         
         response_text = "".join(full_text_chunks)
-        logger.info(f"Response generated: {len(response_text)} chars")
+        print(f"Response generated: {len(response_text)} chars")
         
         # Return in multiple formats for compatibility
         return {
             "response": response_text,
-            "completion": response_text,
-            "output": response_text,
-            "session_id": session_id,
             "sessionId": session_id
         }
         
     except json.JSONDecodeError as e:
-        logger.error(f"JSON decode error: {e}")
+        print(f"JSON decode error: {e}")
         raise HTTPException(status_code=422, detail=f"Invalid JSON: {str(e)}")
     except Exception as e:
-        logger.error(f"Error processing request: {e}", exc_info=True)
+        print(f"Error processing request: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/ping")
