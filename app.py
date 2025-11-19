@@ -164,28 +164,6 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-# Log all requests
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    print(f"Request: {request.method} {request.url.path}")
-    print(f"Headers: {dict(request.headers)}")
-
-    
-    
-    # Read body
-    body = await request.body()
-    print(f"Body: {body.decode() if body else 'empty'}")
-    
-    # Create new request with body
-    async def receive():
-        return {"type": "http.request", "body": body}
-    
-    request._receive = receive
-    
-    response = await call_next(request)
-    print(f"Response status: {response.status_code}")
-    return response
-
 @app.post("/invocations")
 async def invocations(request: Request):
     """Handle invocations - accepts multiple input formats"""
