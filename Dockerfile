@@ -16,10 +16,10 @@ RUN which uv && uv --version
 WORKDIR /app
 
 # Copy dependency files first for better layer caching
-COPY pyproject.toml uv.lock ./
+COPY requirements.txt pyproject.toml uv.lock ./
 
-# Install dependencies using uv (much faster than pip)
-RUN uv sync --frozen --no-dev
+# Install dependencies using uv pip (much faster than pip)
+RUN uv pip install --system --no-cache -r requirements.txt
 
 # Copy application code
 COPY . .
