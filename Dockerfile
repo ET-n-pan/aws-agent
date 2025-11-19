@@ -15,11 +15,9 @@ RUN which uv && uv --version
 
 WORKDIR /app
 
-# Copy dependency files first for better layer caching
-COPY requirements.txt pyproject.toml uv.lock ./
-
-# Install dependencies using uv pip (much faster than pip)
-RUN uv pip install --system --no-cache -r requirements.txt
+# Copy and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY . .
@@ -27,5 +25,5 @@ COPY . .
 # Expose port
 EXPOSE 8080
 
-# Run the application using uv's managed environment
-CMD ["uv", "run", "python", "app.py"]
+# Run the application
+CMD ["python", "app.py"]
