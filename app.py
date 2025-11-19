@@ -112,7 +112,6 @@ async def lifespan(app: FastAPI):
         tools=tools,
         callback_handler=None,
         session_manager=session_manager,
-        model="global.anthropic.claude-haiku-4-5-20251001-v1:0",
         system_prompt="""You are a Bedrock Flow expert.
 
             TOOLS YOU HAVE:
