@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, responses
 import uuid
 import json
 from contextlib import asynccontextmanager
@@ -234,18 +234,23 @@ async def invocations(request: Request):
             "confirm_tool_calls": False,
         }
         
-        async for event in agent.stream_async(prompt, invocation_state=invocation_state):
-            if "data" in event:
-                full_text_chunks.append(event["data"])
+        async def stream_async():
+            async for event in agent.stream_async(prompt, invocation_state=invocation_state):
+                if "data" in event:
+                    full_text_chunks.append(event["data"])
+                    yield event["data"]
+            yield b"\n"
         
-        response_text = "".join(full_text_chunks)
-        print(f"Response generated: {len(response_text)} chars")
+        return responses.StreamingResponse(stream_async(), media_type="text/plain")
+
+        # response_text = "".join(full_text_chunks)
+        # print(f"Response generated: {len(response_text)} chars")
         
-        # Return in multiple formats for compatibility
-        return {
-            "response": response_text,
-            "sessionId": session_id
-        }
+        # # Return in multiple formats for compatibility
+        # return {
+        #     "response": response_text,
+        #     "sessionId": session_id
+        # }
         
     except json.JSONDecodeError as e:
         print(f"JSON decode error: {e}")
