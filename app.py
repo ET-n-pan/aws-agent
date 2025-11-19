@@ -238,7 +238,8 @@ async def invocations(request: Request):
             async for event in agent.stream_async(prompt, invocation_state=invocation_state):
                 if "data" in event:
                     full_text_chunks.append(event["data"])
-                    yield event["data"]
+                    yield event["data"].encode("utf-8")
+                    print(event["data"], end="", flush=True)
             yield b"\n"
         
         return responses.StreamingResponse(stream_async(), media_type="text/plain")
