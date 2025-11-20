@@ -1,4 +1,6 @@
+import time
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import StreamingResponse
 import uuid
 import json
 from contextlib import asynccontextmanager
@@ -68,19 +70,6 @@ async def lifespan(app: FastAPI):
             )
         )
     )
-    
-    # stdio_cdk_client = MCPClient(
-    #     lambda: stdio_client(
-    #         StdioServerParameters(
-    #             command="uvx",
-    #             args=[
-    #                 "--from",
-    #                 "awslabs.cdk-mcp-server@latest",
-    #                 "awslabs.cdk-mcp-server",
-    #             ],
-    #         )
-    #     )
-    # )
     
     stdio_cfn_client = MCPClient(
         lambda: stdio_client(
@@ -165,71 +154,94 @@ app = FastAPI(lifespan=lifespan)
 
 @app.post("/invocations")
 async def invocations(request: Request):
-    """Handle invocations - accepts multiple input formats"""
+    """Streaming with comprehensive metrics logging"""
     if agent is None:
         raise HTTPException(status_code=503, detail="Agent not initialized")
     
     try:
-        # Parse request body
         body = await request.body()
-        print(f"Raw body: {body}")
-        
         data = json.loads(body)
-        print(f"Parsed data: {data}")
         
-        # Extract prompt from various possible formats
-        prompt = None
-        session_id = None
+        # Extract prompt
+        prompt = extract_prompt(data)  # Your existing logic
         
-        if isinstance(data, dict):
-            prompt = (
+        print(f"Streaming: {prompt[:100]}...")
+        
+        # Collect metrics
+        request_metrics = {
+            "prompt_length": len(prompt),
+            "start_time": time.time(),
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+            "tools_used": [],
+        }
+        
+        seen_tools = set()
+        
+        async def generate():
+            invocation_state = {
+                "user_id": ACTOR_ID,
+                "confirm_tool_calls": False,
+            }
+            
+            try:
+                async for event in agent.stream_async(prompt, invocation_state=invocation_state):
+                    # Tool usage
+                    if "current_tool_use" in event:
+                        tool_name = event["current_tool_use"].get("name")
+                        tool_id = event["current_tool_use"].get("toolUseId")
+                        
+                        if tool_name and tool_id and tool_id not in seen_tools:
+                            seen_tools.add(tool_id)
+                            request_metrics["tools_used"].append(tool_name)
+                            yield f"\nTool: {tool_name}\n"
+                    
+                    # Text output
+                    elif "data" in event:
+                        yield event["data"]
+                    
+                    # Final metrics
+                    elif "result" in event:
+                        result = event["result"]
+                        if hasattr(result, 'metrics'):
+                            metrics = result.metrics.accumulated_usage
+                            request_metrics["input_tokens"] = metrics.get('inputTokens', 0)
+                            request_metrics["output_tokens"] = metrics.get('outputTokens', 0)
+                            request_metrics["total_tokens"] = metrics.get('totalTokens', 0)
+                            request_metrics["duration"] = time.time() - request_metrics["start_time"]
+                            
+                            # Log to CloudWatch / your monitoring system
+                            print(f"METRICS: {json.dumps(request_metrics)}")
+                        
+            except Exception as e:
+                yield f"\n\nError: {str(e)}"
+                request_metrics["error"] = str(e)
+            finally:
+                # Always log metrics
+                print(f"Final Metrics: {json.dumps(request_metrics, indent=2)}")
+        
+        return StreamingResponse(generate(), media_type="text/plain")
+        
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=422, detail=f"Invalid JSON: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+def extract_prompt(data):
+    """Helper to extract prompt"""
+    if isinstance(data, dict):
+        if "input" in data and isinstance(data["input"], dict):
+            return data["input"].get("prompt")
+        else:
+            return (
                 data.get("prompt") or 
                 data.get("inputText") or 
                 data.get("input") or 
                 data.get("text") or
                 data.get("query")
             )
-            session_id = data.get("session_id") or data.get("sessionId")
-        elif isinstance(data, str):
-            prompt = data
-        
-        if not prompt:
-            print(f"Could not extract prompt from: {data}")
-            raise HTTPException(
-                status_code=422, 
-                detail=f"Missing prompt field. Received: {list(data.keys()) if isinstance(data, dict) else type(data)}"
-            )
-        
-        print(f"Processing prompt: {prompt[:100]}...")
-        
-        session_id = session_id or f"api-{uuid.uuid4()}"
-        
-        # Run agent
-        full_text_chunks = []
-        invocation_state = {
-            "user_id": ACTOR_ID,
-            "confirm_tool_calls": False,
-        }
-        
-        async for event in agent.stream_async(prompt, invocation_state=invocation_state):
-            if "data" in event:
-                full_text_chunks.append(event["data"])
-        
-        response_text = "".join(full_text_chunks)
-        print(f"Response generated: {len(response_text)} chars")
-        
-        # Return in multiple formats for compatibility
-        return {
-            "response": response_text,
-            "sessionId": session_id
-        }
-        
-    except json.JSONDecodeError as e:
-        print(f"JSON decode error: {e}")
-        raise HTTPException(status_code=422, detail=f"Invalid JSON: {str(e)}")
-    except Exception as e:
-        print(f"Error processing request: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    return data
 
 @app.get("/ping")
 async def ping():
