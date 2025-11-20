@@ -20,7 +20,7 @@ from bedrock_agentcore.memory.integrations.strands.session_manager import (
 )
 
 ACTOR_ID = "bedrock-flow-api"
-AGENTCORE_MEMORY_ID = "strands_agent_memory-GI7k3lEiET"
+AGENTCORE_MEMORY_ID = "bedrock_flow_gen_tool_memory-1oudpjCtIi"
 AGENTCORE_REGION = "us-west-2"
 AGENTCORE_NAMESPACE = f"/bedrock-flow/actors/{ACTOR_ID}/errors"
 
