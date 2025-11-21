@@ -311,7 +311,7 @@ Resources:
               Prompt:
                 SourceConfiguration:
                   Inline:
-                    ModelId: amazon.nova-lite-v1:0
+                    ModelId: global.anthropic.claude-haiku-4-5-20251001-v1:0
                     TemplateType: TEXT
                     InferenceConfiguration:
                       Text:

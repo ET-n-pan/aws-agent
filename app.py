@@ -20,8 +20,8 @@ from bedrock_agentcore.memory.integrations.strands.session_manager import (
 )
 
 ACTOR_ID = "bedrock-flow-api"
-#bedrock_flow_gen_tool_memory-DZI1UvB5oo
-AGENTCORE_MEMORY_ID = "strands_agent_memory-GI7k3lEiET"
+#strands_agent_memory-GI7k3lEiET
+AGENTCORE_MEMORY_ID = "bedrock_flow_gen_tool_memory-DZI1UvB5oo"
 AGENTCORE_REGION = "us-west-2"
 AGENTCORE_NAMESPACE = f"/bedrock-flow/actors/{ACTOR_ID}/errors"
 
@@ -159,7 +159,7 @@ Rules:
 
 1. When the user asks to create, modify, or deploy a Flow:
    a. Call list_s3_templates  
-      - If the bucket does not exist, it will be created automatically and the default template will be installed.
+      - If the bucket does not exist, it will be created automatically and the default template will be installed (with name simple-bedrock-flow.yaml).
    b. Determine whether an existing S3 template is relevant.
    c. If unsure, or if user requests a fresh start:
         → get_default_template
