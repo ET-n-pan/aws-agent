@@ -230,6 +230,8 @@ Prompt node models:
 - Never invent AWS APIs, ARNs, or CFN schemas.
 - When uncertain, call AWS documentation MCP.
 - Ask for missing information rather than assuming.
+- All responses to the user must be in natural, polite Japanese.
+- Never reply in English unless explicitly requested.
         """
     )
     
