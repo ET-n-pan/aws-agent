@@ -286,7 +286,7 @@ Resources:
                 Action:
                   - bedrock:InvokeModel
                 Resource: 
-                  - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/amazon.nova-lite-v1:0'
+                  - !Sub 'arn:aws:bedrock:${AWS::Region}::foundation-model/global.anthropic.claude-haiku-4-5-20251001-v1:0'
 
   # Simple Bedrock Flow
   SimpleBedrockFlow:
