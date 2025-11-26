@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from mcp import stdio_client, StdioServerParameters
 from strands import Agent
 from strands.tools.mcp import MCPClient
-from my_tools import deploy_bedrock_flow_stack, invoke_bedrock_flow, get_template, save_template, list_s3_templates, get_default_template
+from my_tools import deploy_bedrock_flow_stack, invoke_bedrock_flow, get_template, save_template, list_s3_templates, get_default_template, delete_bedrock_flow_stack
 
 from strands_tools.agent_core_memory import AgentCoreMemoryToolProvider
 from bedrock_agentcore.memory.integrations.strands.config import (
@@ -94,7 +94,7 @@ async def lifespan(app: FastAPI):
     tools = (
         stdio_documentation_client.list_tools_sync()
         + stdio_cfn_client.list_tools_sync()
-        + [deploy_bedrock_flow_stack, invoke_bedrock_flow, get_template, save_template, list_s3_templates, get_default_template]
+        + [deploy_bedrock_flow_stack, invoke_bedrock_flow, get_template, save_template, list_s3_templates, get_default_template, delete_bedrock_flow_stack]
         + memory_provider.tools
     )
     
