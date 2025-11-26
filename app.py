@@ -99,6 +99,7 @@ async def lifespan(app: FastAPI):
     )
     
     agent = Agent(
+        model="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
         tools=tools,
         callback_handler=None,
         session_manager=session_manager,
