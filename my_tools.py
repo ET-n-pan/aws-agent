@@ -6,7 +6,11 @@ from typing import Dict, List, Optional, Any
 import boto3
 from strands import tool
 
-DEFAULT_REGION = os.environ.get("BEDROCK_FLOW_REGION", "us-west-2")
+DEFAULT_REGION = (
+    os.getenv("AWS_REGION")
+    or os.getenv("AWS_DEFAULT_REGION")
+    or "us-west-2"
+)
 
 def _effective_region(region: Optional[str]) -> str:
     """
