@@ -22,7 +22,7 @@ def get_cfn_client(region=None):
     """Get CloudFormation client with optional region."""
     
     region = _effective_region(region)
-    return boto3.client("cloudformation", region_name=region)
+    return boto3.client("cloudformation", region_name=DEFAULT_REGION)
 
 
 TERMINAL_STATUSES = {
@@ -270,7 +270,7 @@ def invoke_bedrock_flow(
     Invoke a Bedrock Flow alias and return its output and raw events.
     """
     client = (
-        boto3.client("bedrock-agent-runtime", region_name=region)
+        boto3.client("bedrock-agent-runtime", region_name=DEFAULT_REGION)
         if region is not None
         else boto3.client("bedrock-agent-runtime")
     )
@@ -333,8 +333,8 @@ DEFAULT_TEMPLATE_KEY = "simple-bedrock-flow.yaml"
 def get_s3_client(region: Optional[str] = None):
     """Get S3 client with optional region."""
     if region:
-        return boto3.client("s3", region_name=region)
-    return boto3.client("s3")
+        return boto3.client("s3", region_name=DEFAULT_REGION)
+    return boto3.client("s3", region_name=DEFAULT_REGION)
 
 
 def get_templates_bucket_name(region: Optional[str] = None) -> str:
@@ -343,8 +343,8 @@ def get_templates_bucket_name(region: Optional[str] = None) -> str:
     bedrock-flow-templates-<account-id>-<region>
     """
     session = boto3.session.Session()
-    reg = region or session.region_name or "us-east-1"
-    sts = boto3.client("sts", region_name=reg)
+    reg = region or session.region_name or DEFAULT_REGION
+    sts = boto3.client("sts", region_name=DEFAULT_REGION)
     account_id = sts.get_caller_identity()["Account"]
     return f"{S3_TEMPLATES_BUCKET_PREFIX}-{account_id}-{reg}"
 
@@ -362,8 +362,8 @@ def ensure_templates_bucket(region: Optional[str] = None) -> str:
     except Exception:
         create_kwargs: Dict[str, Any] = {"Bucket": bucket_name}
         session = boto3.session.Session()
-        reg = region or session.region_name or "us-east-1"
-        if reg != "us-east-1":
+        reg = region or session.region_name or DEFAULT_REGION
+        if reg != "us-west-2":
             create_kwargs["CreateBucketConfiguration"] = {
                 "LocationConstraint": reg
             }
