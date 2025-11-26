@@ -1,14 +1,28 @@
 import json
+import os
 import time
 from typing import Dict, List, Optional, Any
 
 import boto3
 from strands import tool
+
+DEFAULT_REGION = os.environ.get("BEDROCK_FLOW_REGION", "us-west-2")
+
+def _effective_region(region: Optional[str]) -> str:
+    """
+    Return the region to actually use:
+    - If region is provided → use it
+    - Otherwise → DEFAULT_REGION
+    """
+    return region or DEFAULT_REGION
+
+
+
 def get_cfn_client(region=None):
     """Get CloudFormation client with optional region."""
-    if region:
-        return boto3.client("cloudformation", region_name=region)
-    return boto3.client("cloudformation")
+    
+    region = _effective_region(region)
+    return boto3.client("cloudformation", region_name=region)
 
 
 TERMINAL_STATUSES = {
@@ -21,6 +35,11 @@ TERMINAL_STATUSES = {
     "UPDATE_ROLLBACK_FAILED",
 }
 
+
+DELETE_TERMINAL_STATUSES = {
+    "DELETE_COMPLETE",
+    "DELETE_FAILED",
+}
 
 @tool
 def deploy_bedrock_flow_stack(
@@ -123,6 +142,120 @@ def deploy_bedrock_flow_stack(
     }
     return json.dumps(result, ensure_ascii=False)
 
+@tool
+def delete_bedrock_flow_stack(
+    stack_name: str,
+    region: Optional[str] = None,
+    poll_interval_seconds: int = 10,
+    timeout_seconds: int = 900,
+) -> str:
+    """
+    Delete a CloudFormation stack and wait for deletion to complete.
+
+    Behavior:
+    - If the stack does not exist → returns status NOT_FOUND.
+    - If deletion succeeds → status SUCCESS, final_stack_status DELETE_COMPLETE.
+    - If deletion fails → status FAILED.
+    - If timeout occurs → status TIMEOUT.
+
+    Args:
+        stack_name: Name or ID of the stack to delete.
+        region: AWS region (defaults to DEFAULT_REGION).
+        poll_interval_seconds: How often to poll describe_stacks.
+        timeout_seconds: Max time to wait for deletion.
+
+    Returns:
+        JSON string with:
+        {
+          "status": "SUCCESS" | "FAILED" | "TIMEOUT" | "NOT_FOUND",
+          "stack_name": "...",
+          "final_stack_status": "...",
+          "status_reason": "...",
+          "last_events": [...]
+        }
+    """
+    client = get_cfn_client(region)
+    start = time.time()
+
+    # Kick off deletion
+    try:
+        client.delete_stack(StackName=stack_name)
+    except client.exceptions.ClientError as e:
+        msg = str(e)
+        if "does not exist" in msg or "not found" in msg:
+            return json.dumps(
+                {
+                    "status": "NOT_FOUND",
+                    "stack_name": stack_name,
+                    "final_stack_status": "DELETE_COMPLETE",
+                    "status_reason": "Stack does not exist",
+                    "last_events": [],
+                },
+                ensure_ascii=False,
+            )
+        raise
+
+    final_stack_status = None
+    status_reason = None
+    last_events: List[Dict[str, Any]] = []
+
+    while True:
+        if time.time() - start > timeout_seconds:
+            return json.dumps(
+                {
+                    "status": "TIMEOUT",
+                    "stack_name": stack_name,
+                    "final_stack_status": final_stack_status,
+                    "status_reason": f"Timed out after {timeout_seconds} seconds",
+                    "last_events": last_events,
+                },
+                ensure_ascii=False,
+            )
+
+        try:
+            desc = client.describe_stacks(StackName=stack_name)
+            stack = desc["Stacks"][0]
+            final_stack_status = stack["StackStatus"]
+            status_reason = stack.get("StackStatusReason")
+
+            # Get some recent events
+            events_resp = client.describe_stack_events(StackName=stack_name)
+            events = events_resp.get("StackEvents", [])[:10]
+            last_events = [
+                {
+                    "timestamp": e["Timestamp"].isoformat(),
+                    "resource_type": e["ResourceType"],
+                    "logical_resource_id": e["LogicalResourceId"],
+                    "resource_status": e["ResourceStatus"],
+                    "resource_status_reason": e.get("ResourceStatusReason"),
+                }
+                for e in events
+            ]
+
+            if final_stack_status in DELETE_TERMINAL_STATUSES:
+                break
+
+        except client.exceptions.ClientError as e:
+            msg = str(e)
+            # When the stack is fully gone, describe_stacks will error with does not exist
+            if "does not exist" in msg or "not found" in msg:
+                final_stack_status = "DELETE_COMPLETE"
+                status_reason = "Stack no longer exists"
+                break
+            raise
+
+        time.sleep(poll_interval_seconds)
+
+    status = "SUCCESS" if final_stack_status == "DELETE_COMPLETE" else "FAILED"
+
+    result = {
+        "status": status,
+        "stack_name": stack_name,
+        "final_stack_status": final_stack_status,
+        "status_reason": status_reason,
+        "last_events": last_events,
+    }
+    return json.dumps(result, ensure_ascii=False)
 
 @tool
 def invoke_bedrock_flow(
