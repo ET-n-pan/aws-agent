@@ -9,6 +9,7 @@ from strands.models import BedrockModel
 from strands.tools.mcp import MCPClient
 from mcp import stdio_client, StdioServerParameters
 import os
+import time
 
 os.environ["BYPASS_TOOL_CONSENT"] = "true"
 
@@ -106,27 +107,12 @@ DEPLOYMENT WORKFLOW:
    - Return frontend URL
 
 4. DIAGRAM:
-   Generate simple YAML diagram:
-   ```yaml
-   resources:
-     - id: api
-       type: apigateway
-       name: API
-     - id: lambda
-       type: lambda
-       name: Function
-     - id: db
-       type: dynamodb
-       name: Database
-     - id: web
-       type: s3
-       name: Frontend
-   connections:
-     - from: api
-       to: lambda
-     - from: lambda
-       to: db
-   ```
+   Generate architecture diagram using generateDiagram tool with the following guidelines:
+    - Use YAML-based diagram-as-code format
+    - Include all major components (S3, Lambda, API Gateway, DynamoDB)
+    - Show connections between components
+    - When saving to file, use generateDiagramToFile tool
+    - Upload diagram to the same S3 bucket as frontend
 
 - Be direct and practical. Use the professional CSS for all frontends. Generate architecture diagrams.
 - All responses to the user must be in natural, polite Japanese
@@ -171,20 +157,52 @@ async def chat(request: Request):
         print(f"\n{'='*60}")
         print(f"USER: {prompt}")
         print(f"{'='*60}\n")
-        
+
+
+        # Collect metrics
+        request_metrics = {
+            "prompt_length": len(prompt),
+            "start_time": time.time(),
+            "input_tokens": 0,
+            "output_tokens": 0,
+            "total_tokens": 0,
+            "tools_used": [],
+        }
+        seen_tools = set()
+
         async def generate():
+            invocation_state = {
+                "user_id": "test_user",
+                "confirm_tool_calls": False,
+            }
             try:
-                invocation_state = {
-                    "user_id": "test_user",
-                    "confirm_tool_calls": False,
-                }
                 async for event in agent.stream_async(prompt, invocation_state=invocation_state):
-                    if "data" in event:
+                    # Tool usage
+                    if "current_tool_use" in event:
+                        tool_name = event["current_tool_use"].get("name")
+                        tool_id = event["current_tool_use"].get("toolUseId")
+                        
+                        if tool_name and tool_id and tool_id not in seen_tools:
+                            seen_tools.add(tool_id)
+                            request_metrics["tools_used"].append(tool_name)
+                            yield f"\nTool: {tool_name}\n"
+                    
+                    # Text output
+                    elif "data" in event:
                         yield event["data"]
-                    elif "current_tool_use" in event:
-                        tool_name = event["current_tool_use"].get("name", "unknown")
-                        yield f"\n[Using tool: {tool_name}]\n"
-                        print(f"\n[Tool: {tool_name}]", flush=True)
+                    
+                    # Final metrics
+                    elif "result" in event:
+                        result = event["result"]
+                        if hasattr(result, 'metrics'):
+                            metrics = result.metrics.accumulated_usage
+                            request_metrics["input_tokens"] = metrics.get('inputTokens', 0)
+                            request_metrics["output_tokens"] = metrics.get('outputTokens', 0)
+                            request_metrics["total_tokens"] = metrics.get('totalTokens', 0)
+                            request_metrics["duration"] = time.time() - request_metrics["start_time"]
+                            
+                            # Log to CloudWatch / your monitoring system
+                            print(f"METRICS: {json.dumps(request_metrics)}")
                 print("\n")
             except KeyboardInterrupt:
                 yield "\n\n[Interrupted by user]\n"
