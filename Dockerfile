@@ -13,9 +13,9 @@ RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:/root/.cargo/bin:$PATH"
 
 # Install Go for ARM64
-RUN wget https://go.dev/dl/go1.21.5.linux-arm64.tar.gz \
-    && tar -C /usr/local -xzf go1.21.5.linux-arm64.tar.gz \
-    && rm go1.21.5.linux-arm64.tar.gz
+RUN wget https://go.dev/dl/go1.24.10.linux-arm64.tar.gz \
+    && tar -C /usr/local -xzf go1.24.10.linux-arm64.tar.gz \
+    && rm go1.24.10.linux-arm64.tar.gz
 
 # Set Go environment
 ENV PATH="/usr/local/go/bin:${PATH}"
