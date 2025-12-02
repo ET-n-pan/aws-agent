@@ -95,16 +95,21 @@ DEPLOYMENT WORKFLOW:
    - Deploy via CloudFormation or direct use_aws calls
    - Extract API endpoint from outputs
 
-2. FRONTEND:
-   - Generate HTML/React with above CSS
-   - Create S3 bucket
+2. FRONTEND (IMPORTANT - NO PUBLIC S3):
+   - Create PRIVATE S3 bucket (DO NOT enable public access)
    - Upload files with proper content types
-   - Enable static website hosting
+   - Create CloudFront distribution with:
+     * Origin: S3 bucket
+     * Origin Access Control (OAC) to access private S3
+     * Default root object: index.html
+     * Error pages: 404 -> /index.html (for SPA routing)
+   - Update S3 bucket policy to allow CloudFront OAC
+   - Return CloudFront URL (https://xxxxx.cloudfront.net)
 
 3. TESTING:
    - Test API with http_request tool
    - Verify DynamoDB operations with CRUD calls
-   - Return frontend URL
+   - Return CloudFront URL
 
 4. DIAGRAM:
    Generate architecture diagram using generateDiagram tool with the following guidelines:
