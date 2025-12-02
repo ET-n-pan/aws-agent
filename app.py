@@ -103,7 +103,7 @@ DEPLOYMENT WORKFLOW:
 
 3. TESTING:
    - Test API with http_request tool
-   - Verify DynamoDB operations
+   - Verify DynamoDB operations with CRUD calls
    - Return frontend URL
 
 4. DIAGRAM:
