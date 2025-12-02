@@ -147,7 +147,7 @@ DEPLOYMENT WORKFLOW:
 
 app = FastAPI(lifespan=lifespan)
 
-@app.post("/chat")
+@app.post("/invocations")
 async def chat(request: Request):
     """Simple chat endpoint for testing"""
     if agent is None:
@@ -264,6 +264,10 @@ async def health():
             "AWS deployment automation"
         ]
     }
+
+@app.get("/ping")
+async def ping():
+    return {"status": "ok"}
 
 if __name__ == "__main__":
     import uvicorn
