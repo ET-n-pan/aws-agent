@@ -10,18 +10,35 @@ from strands.tools.mcp import MCPClient
 from mcp import stdio_client, StdioServerParameters
 import os
 import time
+from strands.agent.conversation_manager import SummarizingConversationManager
+
 
 os.environ["BYPASS_TOOL_CONSENT"] = "true"
+os.environ["BEDROCK_AGENTCORE_MEMORY_ID"] = "strands_agent_memory-lX81ww9Oxb"
+os.environ["BEDROCK_AGENTCORE_MEMORY_REGION"] = "us-west-2"
 
 # Global state
 agent = None
 mcp_clients = []
+
+summarization_model = BedrockModel(
+    model_id="us.anthropic.claude-opus-4-5-20251101-v1:0",
+    region_name="us-west-2",
+    temperature=0.1,
+)
 
 bedrock_model = BedrockModel(
     model_id="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
     region_name="us-west-2",
     temperature=0.3,
 )
+custom_summarization_agent = Agent(model=summarization_model)
+conversation_manager = SummarizingConversationManager(
+    summary_ratio=0.4,
+    preserve_recent_messages=10,
+    summarization_agent=custom_summarization_agent
+)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -55,6 +72,7 @@ async def lifespan(app: FastAPI):
     ] + diagram_mcp.list_tools_sync()
     
     agent = Agent(
+        conversation_manager=conversation_manager,
         model=bedrock_model,
         tools=tools,
         system_prompt="""
@@ -95,6 +113,9 @@ DEPLOYMENT WORKFLOW:
    - Generate Lambda function code
    - Deploy via CloudFormation or direct use_aws calls
    - Extract API endpoint from outputs
+   - if bedrock model is needed for backend, use us.anthropic.claude-sonnet-4-5-20250929-v1:0 for best cost/performance
+   - set up regional inference profile permission correctly, give AmazonBedrockFullAccess to the Lambda execution role
+   - Give permissive IAM role to Lambda for aws services access 
 
 2. FRONTEND (IMPORTANT - NO PUBLIC S3):
    - Create PRIVATE S3 bucket (DO NOT enable public access)
