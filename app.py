@@ -302,6 +302,7 @@ Set correct content types:
 ### Phase 4: Architecture Diagram
 
 Generate diagram based on deployed resources using the diagram generation tools.
+Use english language for all labels and descriptions.
 
 **Include only what was deployed:**
 - CloudFront + S3 (always for frontend)
