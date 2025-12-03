@@ -25,7 +25,7 @@ os.environ["BYPASS_TOOL_CONSENT"] = "true"
 os.environ["BEDROCK_AGENTCORE_MEMORY_REGION"] = "us-west-2"
 
 ACTOR_ID = "web-builder-agent"
-AGENTCORE_MEMORY_ID = "fullstack_agent_mem-dDx5xAErik" 
+AGENTCORE_MEMORY_ID = "fullstack_agent_mem-dDx5xAEtik" 
 MEMORY_STRATEGY_ID = "episodic_builtin_0x51n-4ezZ1YB1hf"
 AGENTCORE_REGION = "us-west-2"
 AGENTCORE_NAMESPACE = f"/web-builder/actors/{ACTOR_ID}/deployments"
