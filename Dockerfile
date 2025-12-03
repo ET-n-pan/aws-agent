@@ -12,6 +12,15 @@ RUN apt-get update && apt-get install -y \
 RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 ENV PATH="/root/.local/bin:/root/.cargo/bin:$PATH"
 
+# Install Node.js 24.x LTS for React/Vite builds
+RUN curl -fsSL https://deb.nodesource.com/setup_24.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g npm@latest \
+    && npm --version && node --version
+
+# Install zip/unzip for Lambda packaging
+RUN apt-get install -y zip unzip
+
 # Install Go for ARM64
 RUN wget https://go.dev/dl/go1.24.10.linux-arm64.tar.gz \
     && tar -C /usr/local -xzf go1.24.10.linux-arm64.tar.gz \

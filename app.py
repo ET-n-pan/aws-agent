@@ -145,6 +145,22 @@ Make use of agent_core_memory to retrieve past deployment knowledge.
 
 ---
 
+## AVAILABLE TOOLS:
+- use_aws: AWS service operations (S3, CloudFormation, Lambda, API Gateway, DynamoDB)
+- file_write: Create files
+- file_read: Read files
+- shell: Execute commands (npm, node, zip available)
+- http_request: Test endpoints
+- generateDiagram: Generate AWS architecture diagrams
+- generateDiagramToFile: Save diagrams to file
+- agent_core_memory: Store and retrieve deployment memories
+
+## ENVIRONMENT:
+- Node.js 24.x LTS installed (npm, npx available)
+- zip/unzip available for Lambda packaging
+- Can run: npm create vite, npm install, npm run build
+- Can package Lambda: zip -r function.zip handler.py dependencies/
+
 ## Design Rules
 
 ### Color Palette (use only these)
