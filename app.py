@@ -11,18 +11,31 @@ from mcp import stdio_client, StdioServerParameters
 import os
 import time
 from strands.agent.conversation_manager import SummarizingConversationManager
-
+import uuid
+from strands_tools.agent_core_memory import AgentCoreMemoryToolProvider
+from bedrock_agentcore.memory.integrations.strands.config import (
+    AgentCoreMemoryConfig,
+    RetrievalConfig,
+)
+from bedrock_agentcore.memory.integrations.strands.session_manager import (
+    AgentCoreMemorySessionManager,
+)
 
 os.environ["BYPASS_TOOL_CONSENT"] = "true"
-os.environ["BEDROCK_AGENTCORE_MEMORY_ID"] = "strands_agent_memory-lX81ww9Oxb"
 os.environ["BEDROCK_AGENTCORE_MEMORY_REGION"] = "us-west-2"
+
+ACTOR_ID = "web-builder-agent"
+AGENTCORE_MEMORY_ID = "fullstack_agent_mem-dDx5xAErik" 
+MEMORY_STRATEGY_ID = "episodic_builtin_0x51n-4ezZ1YB1hf"
+AGENTCORE_REGION = "us-west-2"
+AGENTCORE_NAMESPACE = f"/web-builder/actors/{ACTOR_ID}/deployments"
 
 # Global state
 agent = None
 mcp_clients = []
 
 summarization_model = BedrockModel(
-    model_id="us.anthropic.claude-opus-4-5-20251101-v1:0",
+    model_id="us.anthropic.claude-sonnet-4-5-20250929-v1:0",
     region_name="us-west-2",
     temperature=0.1,
 )
@@ -39,11 +52,39 @@ conversation_manager = SummarizingConversationManager(
     summarization_agent=custom_summarization_agent
 )
 
+EPISODE_NAMESPACE = f"/strategies/{MEMORY_STRATEGY_ID}/actors/{ACTOR_ID}/sessions/{{session_id}}"
+REFLECTION_NAMESPACE = f"/strategies/{MEMORY_STRATEGY_ID}/actors/{ACTOR_ID}"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown logic"""
     global agent, mcp_clients
+
+    SESSION_ID = f"api-{uuid.uuid4()}"
+    
+    # Initialize memory with episode namespace
+    memory_provider = AgentCoreMemoryToolProvider(
+        memory_id=AGENTCORE_MEMORY_ID,
+        actor_id=ACTOR_ID,
+        session_id=SESSION_ID,
+        namespace=EPISODE_NAMESPACE.format(session_id=SESSION_ID), 
+        region=AGENTCORE_REGION,
+    )
+    
+    memory_config = AgentCoreMemoryConfig(
+        memory_id=AGENTCORE_MEMORY_ID,
+        session_id=SESSION_ID,
+        actor_id=ACTOR_ID,
+        retrieval_config={
+            EPISODE_NAMESPACE.format(session_id=SESSION_ID): RetrievalConfig(top_k=5, relevance_score=0.5),
+            REFLECTION_NAMESPACE: RetrievalConfig(top_k=3, relevance_score=0.6),
+        },
+    )
+    
+    session_manager = AgentCoreMemorySessionManager(
+        agentcore_memory_config=memory_config,
+        region_name=AGENTCORE_REGION,
+    )
     
     # Initialize diagram-as-code MCP client
     # Using the binary installed via go install
@@ -69,10 +110,10 @@ async def lifespan(app: FastAPI):
         file_read,
         shell,
         http_request,
-    ] + diagram_mcp.list_tools_sync()
+    ] + diagram_mcp.list_tools_sync() + memory_provider.tools
     
     agent = Agent(
-        conversation_manager=conversation_manager,
+        session_manager=session_manager,
         model=bedrock_model,
         tools=tools,
         system_prompt="""
@@ -87,6 +128,8 @@ You are a full-stack web application builder for AWS serverless deployments.
 **Reject:** Non-web requests (data pipelines, ML training, mobile apps, non-AWS infrastructure)
 
 If unclear, ask for clarification before rejecting.
+
+Make use of agent_core_memory to retrieve past deployment knowledge.
 
 ---
 
