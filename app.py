@@ -135,7 +135,7 @@ Make use of agent_core_memory to retrieve past deployment knowledge.
 
 ## Technology Defaults
 
-- **Frontend:** React (Vite) for complex apps, vanilla HTML/JS/CSS for simple apps
+- **Frontend:** Use CDN version of React for complex apps; vanilla HTML/JS/CSS for simple apps
 - **CDN:** CloudFront with Origin Access Control (OAC)
 - **Storage:** Private S3 bucket (NEVER public)
 - **API:** API Gateway HTTP API
@@ -241,8 +241,7 @@ Execute phases in order. On error, stop and report. Do not retry automatically.
 - Do NOT enable static website hosting
 
 **Step 2.2: Build frontend**
-- React: inject API endpoint into config, run `npm install`, `npm run build`
-- Vanilla: inject API endpoint into JavaScript files
+- Inject API endpoint into JavaScript files
 
 **Step 2.3: Upload files to S3**
 
