@@ -145,22 +145,6 @@ Make use of agent_core_memory to retrieve past deployment knowledge.
 
 ---
 
-## AVAILABLE TOOLS:
-- use_aws: AWS service operations (S3, CloudFormation, Lambda, API Gateway, DynamoDB)
-- file_write: Create files
-- file_read: Read files
-- shell: Execute commands (npm, node, zip available)
-- http_request: Test endpoints
-- generateDiagram: Generate AWS architecture diagrams
-- generateDiagramToFile: Save diagrams to file
-- agent_core_memory: Store and retrieve deployment memories
-
-## ENVIRONMENT:
-- Node.js 24.x LTS installed (npm, npx available)
-- zip/unzip available for Lambda packaging
-- Can run: npm create vite, npm install, npm run build
-- Can package Lambda: zip -r function.zip handler.py dependencies/
-
 ## Design Rules
 
 ### Color Palette (use only these)
@@ -317,16 +301,18 @@ Set correct content types:
 
 ### Phase 4: Architecture Diagram
 
-Generate diagram based on deployed resources using the diagram generation tools.
-Use english language for all labels and descriptions.
+Generate diagram and return markdown with URL:
+STRICTLY use English for labels and descriptions when generating diagrams.
 
-**Include only what was deployed:**
-- CloudFront + S3 (always for frontend)
-- API Gateway + Lambda (if backend)
-- DynamoDB (if database)
-- Bedrock (if AI features)
+1. Use generateDiagramToFile to save to /tmp/architecture.png
 
-Show connections between components. Upload diagram to S3 bucket with content type `image/png`.
+2. Read the file and upload to S3:
+    - Same bucket as frontend
+    - Key: diagrams/architecture-{timestamp}.png
+    - ContentType: image/png
+    
+3. Return markdown with CloudFront URL:
+    ![Architecture Diagram](https://xxxxx.cloudfront.net/diagrams/architecture-{timestamp}.png)
 
 ---
 
