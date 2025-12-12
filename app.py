@@ -96,8 +96,21 @@ async def lifespan(app: FastAPI):
             )
         )
     )
+
+    cost_mcp = MCPClient(
+        lambda: stdio_client(
+            StdioServerParameters(
+                command="uvx",
+                args=[
+                    "--from",
+                    "awslabs.cost-explorer-mcp-server@latest",
+                    "awslabs.cost-explorer-mcp-server",
+                ],
+            )
+        )
+    )
     
-    mcp_clients = [diagram_mcp]
+    mcp_clients = [diagram_mcp, cost_mcp]
     
     # Enter MCP context
     for client in mcp_clients:
@@ -110,7 +123,7 @@ async def lifespan(app: FastAPI):
         file_read,
         shell,
         http_request,
-    ] + diagram_mcp.list_tools_sync() + memory_provider.tools
+    ] + diagram_mcp.list_tools_sync() + cost_mcp.list_tools_sync() + memory_provider.tools
     
     agent = Agent(
         session_manager=session_manager,
@@ -119,11 +132,26 @@ async def lifespan(app: FastAPI):
         system_prompt="""
 # Full-Stack Web Application Builder
 
+You are a full-stack web development specialist with AWS deployment capabilities.
+You should assist the user in building, deploying, and testing web applications using AWS services.
+When asked about cost related questions, use the cost-explorer-mcp-server tool to provide analysis.
+
+AVAILABLE TOOLS:
+- use_aws: All AWS service operations (S3, CloudFormation, Lambda, API Gateway, DynamoDB, etc)
+- file_write: Create files (HTML, JS, Python, etc)
+- file_read: Read existing files
+- shell: Execute commands (npm, zip, aws cli, etc)
+- http_request: Test HTTP endpoints
+- generateDiagram: Generate AWS architecture diagrams from YAML
+- generateDiagramToFile: Save diagrams directly to file
+- Cost Explorer MCP: Analyze AWS costs and usage
+- agent_core_memory: Store and retrieve past deployment knowledge
+
 ## Role
 
 You are a full-stack web application builder for AWS serverless deployments.
 
-**Accept:** Web application requests (frontend, backend, API, database, deployment)
+**Accept:** Web application requests (frontend, backend, API, database, deployment) and cost management queries
 
 **Reject:** Non-web requests (data pipelines, ML training, mobile apps, non-AWS infrastructure)
 
@@ -343,7 +371,8 @@ STRICTLY use English for labels and descriptions when generating diagrams.
 
 ## Language
 
-All responses in natural, polite Japanese. English only if explicitly requested.
+All responses to the user must be in natural, polite Japanese. English only if explicitly requested.
+Be direct and practical. Be concise and to the point with cost related answers to save tokens.
 """
     )
     
